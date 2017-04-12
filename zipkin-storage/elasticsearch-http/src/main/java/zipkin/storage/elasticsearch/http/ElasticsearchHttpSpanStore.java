@@ -40,6 +40,7 @@ final class ElasticsearchHttpSpanStore implements AsyncSpanStore {
 
   static final String SPAN = "span";
   static final String DEPENDENCY_LINK = "dependencylink";
+  static final String SERVICE_SPAN = "servicespan";
 
   final SearchCallFactory search;
   final String[] allIndices;
@@ -188,12 +189,8 @@ final class ElasticsearchHttpSpanStore implements AsyncSpanStore {
     long beginMillis =  endMillis - namesLookback;
 
     List<String> indices = indexNameFormatter.indexNamePatternsForRange(beginMillis, endMillis);
-    SearchRequest.Filters filters = new SearchRequest.Filters();
-    filters.addRange("timestamp_millis", beginMillis, endMillis);
-    SearchRequest request = SearchRequest.forIndicesAndType(indices, SPAN)
-        .filters(filters)
-        .addAggregation(Aggregation.nestedTerms("annotations.endpoint.serviceName"))
-        .addAggregation(Aggregation.nestedTerms("binaryAnnotations.endpoint.serviceName"));
+    SearchRequest request = SearchRequest.forIndicesAndType(indices, SERVICE_SPAN)
+        .addAggregation(Aggregation.terms("serviceName", Integer.MAX_VALUE));
 
     search.newCall(request, BodyConverters.SORTED_KEYS).submit(callback);
   }
@@ -208,15 +205,10 @@ final class ElasticsearchHttpSpanStore implements AsyncSpanStore {
     long beginMillis =  endMillis - namesLookback;
 
     List<String> indices = indexNameFormatter.indexNamePatternsForRange(beginMillis, endMillis);
-    SearchRequest.Filters filters = new SearchRequest.Filters();
-    filters.addRange("timestamp_millis", beginMillis, endMillis);
-    filters.addNestedTerms(asList(
-        "annotations.endpoint.serviceName",
-        "binaryAnnotations.endpoint.serviceName"
-    ), serviceName.toLowerCase(Locale.ROOT));
-    SearchRequest request = SearchRequest.forIndicesAndType(indices, SPAN)
-        .filters(filters)
-        .addAggregation(Aggregation.terms("name", Integer.MAX_VALUE));
+
+    SearchRequest request = SearchRequest.forIndicesAndType(indices, SERVICE_SPAN)
+        .term("serviceName", serviceName.toLowerCase(Locale.ROOT))
+        .addAggregation(Aggregation.terms("spanName", Integer.MAX_VALUE));
 
     search.newCall(request, BodyConverters.SORTED_KEYS).submit(callback);
   }
